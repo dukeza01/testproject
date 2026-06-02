@@ -6358,6 +6358,106 @@ document.addEventListener('click', e => {
     }
   });
 })();
+
+<script>
+// ===============================
+// ✅ GLOBAL STATE
+// ===============================
+const appState = {
+  currentPage: "dashboard",
+  charts: []
+};
+
+// ===============================
+// ✅ PAGE ROUTER (แก้ปัญหาซ้อน)
+// ===============================
+const pages = [
+  "dashboard",
+  "plan",
+  "projects",
+  "gantt",
+  "actlog",
+  "gsheet"
+];
+
+function hideAllPages() {
+  pages.forEach(p => {
+    const el = document.getElementById("page-" + p);
+    if (el) el.style.display = "none";
+  });
+}
+
+function showPage(page) {
+  console.log("Switch page:", page);
+
+  // ✅ set state
+  appState.currentPage = page;
+
+  // ✅ ปิด overlay
+  closeAllOverlays();
+
+  // ✅ ซ่อนทั้งหมดก่อน
+  hideAllPages();
+
+  // ✅ แสดงเฉพาะหน้าเดียว
+  const target = document.getElementById("page-" + page);
+  if (target) target.style.display = "block";
+
+  // ✅ reset scroll
+  window.scrollTo(0, 0);
+
+  // ✅ rerender chart (fix ซ้อน)
+  resetCharts();
+}
+
+// ===============================
+// ✅ OVERLAY MANAGER
+// ===============================
+function closeAllOverlays() {
+  document.querySelectorAll(
+    ".modal-overlay, .lightbox-overlay, .auth-overlay"
+  ).forEach(el => el.classList.remove("open"));
+}
+
+// ===============================
+// ✅ CHART MANAGER (กันซ้อน)
+// ===============================
+function resetCharts() {
+  if (appState.charts.length) {
+    appState.charts.forEach(c => c.destroy());
+  }
+  appState.charts = [];
+}
+
+// helper สำหรับสร้าง chart ใหม่
+function safeCreateChart(ctx, config) {
+  const chart = new Chart(ctx, config);
+  appState.charts.push(chart);
+  return chart;
+}
+
+// ===============================
+// ✅ SAFE MODAL OPEN
+// ===============================
+function openAdd() {
+  closeAllOverlays();
+  document.getElementById("modalOverlay").classList.add("open");
+}
+
+// ===============================
+// ✅ FIRST LOAD FIX (GitHub)
+// ===============================
+window.addEventListener("load", () => {
+  console.log("App loaded ✅");
+
+  // ✅ fix GitHub cache/localStorage
+  // (เปิดใช้เฉพาะ debug)
+  // localStorage.clear();
+
+  // ✅ render หน้าแรก
+  showPage("dashboard");
+});
+
 </script>
 
 </body>
