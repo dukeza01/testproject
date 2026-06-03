@@ -6,6 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
+<!-- GitHub Pages CDN cache: force reload ด้วย Ctrl+Shift+R หรือเพิ่ม ?v=XXX ใน URL -->
 <title>ระบบรายงาน พ.ศ. 2570 | มูลนิธิการศึกษาทางไกลผ่านดาวเทียม</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -1416,7 +1417,7 @@ body.year-2570 #page-dashboard::before {
     <div class="content">
 
       <!-- ===== DASHBOARD ===== -->
-      <div id="page-dashboard">
+      <div id="page-dashboard" style="display:none">
 
         <!-- Year Banner -->
         <div class="year-banner banner-2570" id="yearBanner">
@@ -2471,14 +2472,15 @@ function resetToDefault() {
 }
 
 // ===== NAVIGATION =====
-function showPage(page, strategyFilter) {
+function showPage(page, strategyFilter, navEl) {
   // ซ่อนทุก page รวม page-plan ด้วย
   ['dashboard','plan','projects','gsheet','gantt','actlog'].forEach(p => {
     const el = document.getElementById('page-'+p);
     if (el) el.style.display = p===page ? 'block' : 'none';
   });
   document.querySelectorAll('.nav-item').forEach(el=>el.classList.remove('active'));
-  if(event&&event.currentTarget) event.currentTarget.classList.add('active');
+  const activeEl = navEl || (typeof event !== 'undefined' && event && event.currentTarget) || null;
+  if(activeEl) activeEl.classList.add('active');
 
   const titles = {
     dashboard: ['Dashboard สรุปภาพรวม','รายงานผลการดำเนินงานโครงการ ปีงบประมาณ พ.ศ. '+currentYear],
@@ -5243,11 +5245,6 @@ window._pendingSaveTs = 0;
 
   _initGasUI();
 
-  // ── เปิดหน้า dashboard ก่อนเสมอ (page อื่น hidden อยู่แล้ว) ──
-  // ไม่เรียก showPage() ตอนนี้ เพราะมันจะ reset display ทุก page
-  // แค่ทำให้ dashboard แสดงก่อน แล้วค่อย route ตาม mode
-  document.getElementById('page-dashboard').style.display = 'block';
-
   // ── โหลด localStorage ──
   const hadData = loadFromLocal();
   const overlay = document.getElementById('initLoadingOverlay');
@@ -6358,106 +6355,6 @@ document.addEventListener('click', e => {
     }
   });
 })();
-
-<script>
-// ===============================
-// ✅ GLOBAL STATE
-// ===============================
-const appState = {
-  currentPage: "dashboard",
-  charts: []
-};
-
-// ===============================
-// ✅ PAGE ROUTER (แก้ปัญหาซ้อน)
-// ===============================
-const pages = [
-  "dashboard",
-  "plan",
-  "projects",
-  "gantt",
-  "actlog",
-  "gsheet"
-];
-
-function hideAllPages() {
-  pages.forEach(p => {
-    const el = document.getElementById("page-" + p);
-    if (el) el.style.display = "none";
-  });
-}
-
-function showPage(page) {
-  console.log("Switch page:", page);
-
-  // ✅ set state
-  appState.currentPage = page;
-
-  // ✅ ปิด overlay
-  closeAllOverlays();
-
-  // ✅ ซ่อนทั้งหมดก่อน
-  hideAllPages();
-
-  // ✅ แสดงเฉพาะหน้าเดียว
-  const target = document.getElementById("page-" + page);
-  if (target) target.style.display = "block";
-
-  // ✅ reset scroll
-  window.scrollTo(0, 0);
-
-  // ✅ rerender chart (fix ซ้อน)
-  resetCharts();
-}
-
-// ===============================
-// ✅ OVERLAY MANAGER
-// ===============================
-function closeAllOverlays() {
-  document.querySelectorAll(
-    ".modal-overlay, .lightbox-overlay, .auth-overlay"
-  ).forEach(el => el.classList.remove("open"));
-}
-
-// ===============================
-// ✅ CHART MANAGER (กันซ้อน)
-// ===============================
-function resetCharts() {
-  if (appState.charts.length) {
-    appState.charts.forEach(c => c.destroy());
-  }
-  appState.charts = [];
-}
-
-// helper สำหรับสร้าง chart ใหม่
-function safeCreateChart(ctx, config) {
-  const chart = new Chart(ctx, config);
-  appState.charts.push(chart);
-  return chart;
-}
-
-// ===============================
-// ✅ SAFE MODAL OPEN
-// ===============================
-function openAdd() {
-  closeAllOverlays();
-  document.getElementById("modalOverlay").classList.add("open");
-}
-
-// ===============================
-// ✅ FIRST LOAD FIX (GitHub)
-// ===============================
-window.addEventListener("load", () => {
-  console.log("App loaded ✅");
-
-  // ✅ fix GitHub cache/localStorage
-  // (เปิดใช้เฉพาะ debug)
-  // localStorage.clear();
-
-  // ✅ render หน้าแรก
-  showPage("dashboard");
-});
-
 </script>
 
 </body>
