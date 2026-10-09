@@ -13,8 +13,9 @@ const ORG_NAME     = 'ชื่อหน่วยงาน / โรงเรี�
 const ITEM_LABEL   = 'งานแจ้งซ่อม';          // ชื่อเรียกรายการ
 const CODE_PREFIX  = 'RP';                    // รหัสงาน เช่น RP-2569-0001
 const UPLOAD_DIR   = __DIR__ . '/uploads';
+const DATA_DIR     = __DIR__ . '/data';
 const MAX_UPLOAD   = 5 * 1024 * 1024;         // 5MB ต่อไฟล์
-const ADMIN_PASSWORD = 'admin1234';           // รหัสผู้ดูแล (เปลี่ยนก่อนใช้งานจริง)
+// รหัสผ่านผู้ดูแล: ตั้งครั้งแรกผ่านหน้าเว็บ (login.php) แล้วเก็บแบบเข้ารหัสในฐานข้อมูล
 
 const CATEGORIES = [
     'electric'  => 'ไฟฟ้า / แสงสว่าง',
@@ -42,11 +43,42 @@ const STATUSES = [
     'rejected'    => ['ยกเลิก/ไม่อนุมัติ', 'red'],
 ];
 
+// ---------- ตั้งค่าอัตโนมัติครั้งแรก (ไม่ต้องติดตั้งเอง) ----------
+function fatal(string $title, string $msg): never {
+    http_response_code(500);
+    echo '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+       . '<div style="font-family:sans-serif;max-width:560px;margin:60px auto;padding:24px;border:1px solid #fecaca;border-radius:12px;background:#fef2f2">'
+       . '<h2 style="margin-top:0;color:#b91c1c">' . htmlspecialchars($title) . '</h2><p>' . $msg . '</p></div>';
+    exit;
+}
+
+function bootstrap(): void {
+    if (version_compare(PHP_VERSION, '8.0.0', '<'))
+        fatal('PHP เวอร์ชันต่ำเกินไป', 'ต้องใช้ PHP 8.0 ขึ้นไป (ปัจจุบัน ' . PHP_VERSION . ')');
+    if (!extension_loaded('pdo_sqlite'))
+        fatal('ไม่พบ pdo_sqlite', 'กรุณาเปิด extension <code>pdo_sqlite</code> ในแผงควบคุมโฮสติ้ง (cPanel → Select PHP Version)');
+
+    $protect = [
+        DATA_DIR   => "<IfModule mod_authz_core.c>\n  Require all denied\n</IfModule>\n<IfModule !mod_authz_core.c>\n  Deny from all\n</IfModule>\n",
+        UPLOAD_DIR => "<IfModule mod_php.c>\n  php_flag engine off\n</IfModule>\n<IfModule mod_php7.c>\n  php_flag engine off\n</IfModule>\n"
+                    . "<FilesMatch \"\\.(php|phtml|phar|pht)$\">\n  <IfModule mod_authz_core.c>\n    Require all denied\n  </IfModule>\n  <IfModule !mod_authz_core.c>\n    Deny from all\n  </IfModule>\n</FilesMatch>\n",
+    ];
+    foreach ($protect as $dir => $ht) {
+        if (!is_dir($dir) && !@mkdir($dir, 0775, true))
+            fatal('สร้างโฟลเดอร์ไม่ได้', 'เว็บเซิร์ฟเวอร์ไม่มีสิทธิ์สร้างโฟลเดอร์ <code>' . basename($dir) . '/</code> กรุณาสร้างเองและตั้งสิทธิ์เป็น 775');
+        if (!is_writable($dir))
+            fatal('เขียนไฟล์ไม่ได้', 'กรุณาตั้งสิทธิ์โฟลเดอร์ <code>' . basename($dir) . '/</code> เป็น 775 (หรือ 777 บนบางโฮสติ้ง)');
+        if (!is_file("$dir/.htaccess")) @file_put_contents("$dir/.htaccess", $ht);
+        if (!is_file("$dir/index.html")) @file_put_contents("$dir/index.html", '');
+    }
+}
+bootstrap();
+
 // ---------- ฐานข้อมูล ----------
 function db(): PDO {
     static $pdo = null;
     if ($pdo) return $pdo;
-    $pdo = new PDO('sqlite:' . __DIR__ . '/data/app.sqlite');
+    $pdo = new PDO('sqlite:' . DATA_DIR . '/app.sqlite');
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
     $pdo->exec('PRAGMA foreign_keys = ON');
@@ -81,8 +113,24 @@ function db(): PDO {
             actor TEXT,
             created_at TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        );
     ");
     return $pdo;
+}
+
+function setting(string $key, ?string $value = null): ?string {
+    if ($value !== null) {
+        db()->prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
+            ->execute([$key, $value]);
+        return $value;
+    }
+    $st = db()->prepare('SELECT value FROM settings WHERE key = ?');
+    $st->execute([$key]);
+    $v = $st->fetchColumn();
+    return $v === false ? null : $v;
 }
 
 // ---------- ตัวช่วย ----------
@@ -160,6 +208,9 @@ function page_header(string $title, string $active = ''): void {
   </div>
 </header>
 <main class="wrap">
+<?php if ($active !== 'login.php' && setting('admin_password_hash') === null): ?>
+  <div class="alert alert-warn">ระบบเพิ่งติดตั้ง ยังไม่ได้ตั้งรหัสผ่านผู้ดูแล → <a href="login.php">ตั้งรหัสผ่านตอนนี้</a></div>
+<?php endif; ?>
 <?php if ($f = flash()): ?>
   <div class="alert alert-<?= e($f[1]) ?>"><?= e($f[0]) ?></div>
 <?php endif;
